@@ -1,0 +1,35 @@
+{
+  "name": "ppt-mcp-server",
+  "version": "1.0.0",
+  "description": "MCP server for PowerPoint automation",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "ppt-mcp-server": "./dist/index.js"
+  },
+  "scripts": {
+    "start": "node dist/index.js",
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts",
+    "start-node": "tsx src/index.ts",
+    "format": "biome format --write",
+    "lint:fix": "biome lint --fix",
+    "clean": "rm -rf dist",
+    "prepublish": "npm run build"
+  },
+  "keywords": ["mcp", "powerpoint", "automation", "stdio"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.7.0",
+    "pptxgenjs": "^3.12.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "@types/node": "^22.15.3",
+    "typescript": "^5.5.2",
+    "tsx": "^4.19.2"
+  }
+}
