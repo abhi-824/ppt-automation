@@ -8,6 +8,7 @@ import uuid
 import os
 import re
 from pptx.util import Pt
+from fastapi.middleware.cors import CORSMiddleware
 
 
 from .themes.theme import Theme, THEMES
@@ -17,6 +18,13 @@ from .components.layouts import (
 )
 
 app = FastAPI()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 prs = Presentation()
 slide_map: Dict[str, object] = {}
 current_theme: Theme = THEMES["default"]
@@ -270,6 +278,68 @@ def save_presentation(filename: str = "output.pptx"):
     """Save the presentation - used by MCP server"""
     prs.save(filename)
     return {"status": "saved", "filename": filename}
+
+# Add this endpoint to your FastAPI app
+@app.get("/presentation/base64")
+def get_presentation_base64():
+    """
+    Export the current presentation as base64 string
+    Returns: {"base64": "...", "filename": "presentation.pptx"}
+    """
+    try:
+        # Save presentation to BytesIO buffer
+        buffer = io.BytesIO()
+        prs.save(buffer)
+        buffer.seek(0)
+        
+        # Convert to base64
+        base64_data = base64.b64encode(buffer.read()).decode('utf-8')
+        
+        return {
+            "status": "ok",
+            "base64": base64_data,
+            "filename": "presentation.pptx",
+            "slide_count": len(prs.slides)
+        }
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(e)}
+        )
+
+@app.get("/presentation/preview")
+def get_presentation_preview():
+    """
+    Get presentation metadata and base64 for preview
+    """
+    try:
+        buffer = io.BytesIO()
+        prs.save(buffer)
+        buffer.seek(0)
+        
+        base64_data = base64.b64encode(buffer.read()).decode('utf-8')
+        
+        return {
+            "status": "ok",
+            "base64": base64_data,
+            "slide_count": len(prs.slides),
+            "slide_ids": list(slide_map.keys()),
+            "current_theme": current_theme.name if hasattr(current_theme, 'name') else "default"
+        }
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(e)}
+        )
+
+@app.post("/presentation/reset")
+def reset_presentation():
+    """Reset the presentation to start fresh"""
+    global prs, slide_map
+    prs = Presentation()
+    slide_map = {}
+    return {"status": "ok", "message": "Presentation reset"}
+
 
 def apply_markdown_to_text_frame(text_frame, text: str):
     """
