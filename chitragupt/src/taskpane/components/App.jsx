@@ -1,5 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, MessageSquare, Wrench, CheckCircle, XCircle, Download, RefreshCw, Eye } from 'lucide-react';
+/* global PowerPoint */
+
 
 const ORCHESTRATOR_URL = 'https://localhost:8080';
 const PPT_API_URL = 'http://localhost:8000';
@@ -17,9 +19,6 @@ export default function PowerPointChatAddin() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [currentStreamingMessage, setCurrentStreamingMessage] = useState('');
   const [toolCalls, setToolCalls] = useState([]);
-  const [presentationBase64, setPresentationBase64] = useState(null);
-  const [slideCount, setSlideCount] = useState(0);
-  const [isLoadingPreview, setIsLoadingPreview] = useState(false);
   const messagesEndRef = useRef(null);
   const eventSourceRef = useRef(null);
 
@@ -40,78 +39,47 @@ export default function PowerPointChatAddin() {
     };
   }, []);
 
-  // Fetch presentation preview
-  const fetchPresentationPreview = async () => {
-    setIsLoadingPreview(true);
-    try {
-      const response = await fetch(`${PPT_API_URL}/presentation/preview`);
-      const data = await response.json();
-      
-      if (data.status === 'ok') {
-        setPresentationBase64(data.base64);
-        setSlideCount(data.slide_count);
-      }
-    } catch (error) {
-      console.error('Failed to fetch presentation preview:', error);
-    } finally {
-      setIsLoadingPreview(false);
-    }
+  const deleteAllSlides = async () => {
+    await PowerPoint.run(async (context) => {
+      let slides = context.presentation.slides.load("items/id");
+      await context.sync();
+      slides.items.forEach(slide => slide.delete());
+      await context.sync();
+    });
   };
+  const insertSlidesFromBase64 = async (pptBase64) => {
+    await PowerPoint.run(async (context) => {
+      context.presentation.insertSlidesFromBase64(pptBase64, {
+        formatting: "UseDestinationTheme",
+        targetSlideId: null
+      });
+      await context.sync();
+    });
+  };
+  
 
   const replacePresentationInPowerPoint = async () => {
     try {
-      const response = await fetch(`${PPT_API_URL}/presentation/preview`);
+      const response = await fetch(`${ORCHESTRATOR_URL}/ppt/preview`, {
+        mode: 'cors',
+        credentials: 'omit',
+      });
       const data = await response.json();
   
       if (data.status === "ok" && data.base64) {
-        await new Promise((resolve, reject) => {
-          Office.context.document.setSelectedDataAsync(
-            data.base64,
-            { coercionType: Office.CoercionType.File },
-            (result) => {
-              if (result.status === Office.AsyncResultStatus.Succeeded) {
-                console.log("PPT replaced successfully");
-                resolve();
-              } else {
-                console.error("Failed to replace PPT:", result.error);
-                reject(result.error);
-              }
-            }
-          );
-        });
+        // Step 1: Delete all slides
+        await deleteAllSlides();
   
-        setPresentationBase64(data.base64);
-        setSlideCount(data.slide_count);
+        // Step 2: Insert new slides from base64
+        await insertSlidesFromBase64(data.base64);
+  
+        console.log("PPT replaced successfully using Office-JS API");
       }
     } catch (e) {
       console.error("Error replacing PPT:", e);
     }
   };
-
   
-  // Download presentation
-  const downloadPresentation = () => {
-    if (!presentationBase64) return;
-    
-    const byteCharacters = atob(presentationBase64);
-    const byteNumbers = new Array(byteCharacters.length);
-    for (let i = 0; i < byteCharacters.length; i++) {
-      byteNumbers[i] = byteCharacters.charCodeAt(i);
-    }
-    const byteArray = new Uint8Array(byteNumbers);
-    const blob = new Blob([byteArray], { 
-      type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' 
-    });
-    
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `presentation_${Date.now()}.pptx`;
-    document.body.appendChild(a);
-    a.click();
-    window.URL.revokeObjectURL(url);
-    document.body.removeChild(a);
-  };
 
   const handleSend = async () => {
     if (!inputValue.trim() || isStreaming) return;
@@ -238,9 +206,6 @@ export default function PowerPointChatAddin() {
         setCurrentStreamingMessage('');
         setToolCalls([]);
         setIsStreaming(false);
-        
-        // Auto-fetch preview after task completion
-        fetchPresentationPreview();
         break;
 
       case 'error':
@@ -293,12 +258,6 @@ export default function PowerPointChatAddin() {
               <div className="flex items-center gap-2 text-xs text-blue-600">
                 <div className="w-2 h-2 bg-blue-600 rounded-full animate-pulse"></div>
                 Processing
-              </div>
-            )}
-            {slideCount > 0 && (
-              <div className="flex items-center gap-2 text-xs text-slate-600">
-                <span className="font-medium">{slideCount}</span>
-                <span>slide{slideCount !== 1 ? 's' : ''}</span>
               </div>
             )}
           </div>
@@ -398,35 +357,6 @@ export default function PowerPointChatAddin() {
 
       {/* Input Area */}
       <div className="bg-white border-t border-slate-200 shadow-lg">
-        {/* Preview/Download Bar */}
-        {slideCount > 0 && (
-          <div className="px-6 py-2 border-b border-slate-200 bg-slate-50">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2 text-xs text-slate-600">
-                <Eye className="w-4 h-4" />
-                <span>Presentation ready</span>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={fetchPresentationPreview}
-                  disabled={isLoadingPreview}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors"
-                >
-                  <RefreshCw className={`w-3 h-3 ${isLoadingPreview ? 'animate-spin' : ''}`} />
-                  Refresh
-                </button>
-                <button
-                  onClick={downloadPresentation}
-                  disabled={!presentationBase64}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  <Download className="w-3 h-3" />
-                  Download
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
         
         <div className="px-6 py-4">
           <div className="flex gap-3 items-end">

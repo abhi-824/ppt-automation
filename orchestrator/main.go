@@ -1,13 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
-	"io"
-	"bytes"
 
 	"github.com/mark3labs/mcphost/sdk"
 )
@@ -15,29 +15,32 @@ import (
 type ChatRequest struct {
 	Prompt string `json:"prompt"`
 }
+
 func callPython(path string, method string, body interface{}) ([]byte, error) {
-    url := "http://localhost:8000" + path
+	url := "http://localhost:8000" + path
+	print(url)
 
-    var reqBody io.Reader = nil
-    if body != nil {
-        b, _ := json.Marshal(body)
-        reqBody = bytes.NewBuffer(b)
-    }
+	var reqBody io.Reader = nil
+	if body != nil {
+		b, _ := json.Marshal(body)
+		reqBody = bytes.NewBuffer(b)
+	}
 
-    req, err := http.NewRequest(method, url, reqBody)
-    if err != nil {
-        return nil, err
-    }
-    req.Header.Set("Content-Type", "application/json")
+	req, err := http.NewRequest(method, url, reqBody)
+	if err != nil {
+		print(err)
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
 
-    client := &http.Client{}
-    resp, err := client.Do(req)
-    if err != nil {
-        return nil, err
-    }
-    defer resp.Body.Close()
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
 
-    return io.ReadAll(resp.Body)
+	return io.ReadAll(resp.Body)
 }
 
 func main() {
@@ -64,16 +67,16 @@ func main() {
 		handleChat(w, r, host)
 	}))
 	http.HandleFunc("/ppt/preview", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		print("hi")
 		result, err := callPython("/presentation/preview", http.MethodGet, nil)
 		if err != nil {
 			http.Error(w, err.Error(), 500)
 			return
 		}
-	
+
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(result)
 	}))
-	
 
 	// Health check endpoint
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -96,14 +99,14 @@ func corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		w.Header().Set("Access-Control-Allow-Origin", origin)
+		w.Header().Set("Vary", "Origin")
+		w.Header().Set("Access-Control-Allow-Credentials", "true")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With")
-		w.Header().Set("Access-Control-Allow-Credentials", "true")
 		w.Header().Set("Access-Control-Max-Age", "86400")
-
 		// Handle preflight
 		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusOK)
+			w.WriteHeader(http.StatusNoContent)
 			return
 		}
 

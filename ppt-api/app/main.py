@@ -7,6 +7,8 @@ from pptx.enum.text import MSO_AUTO_SIZE, MSO_VERTICAL_ANCHOR
 import uuid
 import os
 import re
+import io
+import base64
 from pptx.util import Pt
 from fastapi.middleware.cors import CORSMiddleware
 
