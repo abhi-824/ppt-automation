@@ -1,10 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, MessageSquare, Wrench, CheckCircle, XCircle, Download, RefreshCw, Eye } from 'lucide-react';
-/* global PowerPoint */
-
-
-const ORCHESTRATOR_URL = 'https://localhost:8080';
-const PPT_API_URL = 'http://localhost:8000';
+import { Send, MessageSquare, Plus, Cloud, Clock, MoreHorizontal, X, AtSign, ChevronDown, Image, Upload } from 'lucide-react';
+import { 
+  getCurrentSlideAsBase64, 
+  replacePresentationInPowerPoint,
+  sendChatMessage,
+  formatTime, 
+  uint8ToBase64
+} from '../utils';
 
 export default function PowerPointChatAddin() {
   const [messages, setMessages] = useState([
@@ -15,12 +17,16 @@ export default function PowerPointChatAddin() {
       timestamp: new Date()
     }
   ]);
+  const xRef = useRef(1);
+
   const [inputValue, setInputValue] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const [currentStreamingMessage, setCurrentStreamingMessage] = useState('');
   const [toolCalls, setToolCalls] = useState([]);
   const messagesEndRef = useRef(null);
   const eventSourceRef = useRef(null);
+  const [selectedAgent, setSelectedAgent] = useState('Agent #1');
+
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -38,48 +44,6 @@ export default function PowerPointChatAddin() {
       }
     };
   }, []);
-
-  const deleteAllSlides = async () => {
-    await PowerPoint.run(async (context) => {
-      let slides = context.presentation.slides.load("items/id");
-      await context.sync();
-      slides.items.forEach(slide => slide.delete());
-      await context.sync();
-    });
-  };
-  const insertSlidesFromBase64 = async (pptBase64) => {
-    await PowerPoint.run(async (context) => {
-      context.presentation.insertSlidesFromBase64(pptBase64, {
-        formatting: "UseDestinationTheme",
-        targetSlideId: null
-      });
-      await context.sync();
-    });
-  };
-  
-
-  const replacePresentationInPowerPoint = async () => {
-    try {
-      const response = await fetch(`${ORCHESTRATOR_URL}/ppt/preview`, {
-        mode: 'cors',
-        credentials: 'omit',
-      });
-      const data = await response.json();
-  
-      if (data.status === "ok" && data.base64) {
-        // Step 1: Delete all slides
-        await deleteAllSlides();
-  
-        // Step 2: Insert new slides from base64
-        await insertSlidesFromBase64(data.base64);
-  
-        console.log("PPT replaced successfully using Office-JS API");
-      }
-    } catch (e) {
-      console.error("Error replacing PPT:", e);
-    }
-  };
-  
 
   const handleSend = async () => {
     if (!inputValue.trim() || isStreaming) return;
@@ -99,63 +63,24 @@ export default function PowerPointChatAddin() {
     setToolCalls([]);
 
     try {
+      const slideBase64 = uint8ToBase64(await getCurrentSlideAsBase64());
+
       console.log('Connecting to orchestrator...', {
         url: 'https://localhost:8080/chat',
-        prompt: promptToSend
+        prompt: promptToSend,
+        x: xRef.current
       });
 
-      // Use fetch with streaming instead of EventSource since we need POST
-      const response = await fetch('https://localhost:8080/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ prompt: promptToSend }),
-        mode: 'cors',
-        credentials: 'omit'
-      });
-
-      console.log('Response received:', {
-        status: response.status,
-        ok: response.ok,
-        headers: Object.fromEntries(response.headers.entries())
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6);
-            try {
-              const event = JSON.parse(data);
-              handleSSEEvent(event);
-            } catch (e) {
-              console.error('Failed to parse SSE data:', e);
-            }
-          }
-        }
-      }
-
+      
+      await sendChatMessage(promptToSend, slideBase64, handleSSEEvent, xRef.current);
+      xRef.current++;
+      console.log('x', xRef.current);
+      
     } catch (error) {
       console.error('Error connecting to chat API:', error);
       const errorMessage = {
         id: Date.now(),
-        text: `Error: ${error.message}. Make sure the orchestrator is running on http://localhost:8080`,
+        text: `Error: ${error.message}. Make sure the orchestrator is running on https://localhost:8080`,
         sender: 'assistant',
         timestamp: new Date(),
         isError: true
@@ -172,6 +97,13 @@ export default function PowerPointChatAddin() {
         break;
 
       case 'tool-call':
+        console.log('=== TOOL CALL DEBUG ===');
+        console.log('Tool:', event.tool);
+        console.log('Args (raw):', event.args);
+        console.log('Args (stringified):', JSON.stringify(event.args, null, 2));
+        console.log('Args type:', typeof event.args);
+        console.log('=====================');
+  
         setToolCalls(prev => [...prev, {
           id: Date.now(),
           tool: event.tool,
@@ -181,11 +113,19 @@ export default function PowerPointChatAddin() {
         break;
 
       case 'tool-result':
+        console.log('=== TOOL RESULT DEBUG ===');
+        console.log('Tool:', event.tool);
+        console.log('Success:', event.success);
+        console.log('Result (raw):', event.result);
+        console.log('Result (stringified):', JSON.stringify(event.result, null, 2));
+        console.log('========================');
+  
         setToolCalls(prev => prev.map(tool => 
           tool.tool === event.tool && tool.status === 'running'
             ? { ...tool, status: event.success ? 'success' : 'failed', result: event.result }
             : tool
         ));
+        console.log(event.tool)
         replacePresentationInPowerPoint();
         break;
 
@@ -209,6 +149,12 @@ export default function PowerPointChatAddin() {
         break;
 
       case 'error':
+        console.log('=== ERROR DEBUG ===');
+        console.log('Tool:', event.tool);
+        console.log('Error message:', event.error);
+        console.log('Full event:', JSON.stringify(event, null, 2));
+        console.log('==================');
+  
         const errorMessage = {
           id: Date.now(),
           text: `Error: ${event.error}`,
@@ -233,65 +179,61 @@ export default function PowerPointChatAddin() {
       handleSend();
     }
   };
-
-  const formatTime = (date) => {
-    return date.toLocaleTimeString('en-US', { 
-      hour: '2-digit', 
-      minute: '2-digit' 
-    });
-  };
-
   return (
-    <div className="flex flex-col h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+    <div className="flex flex-col h-screen bg-[#1a1a1a] text-white">
       {/* Header */}
-      <div className="bg-white border-b border-slate-200 shadow-sm">
-        <div className="px-6 py-4">
-          <div className="flex items-center gap-3">
-            <div className="bg-blue-600 p-2 rounded-lg">
-              <MessageSquare className="w-5 h-5 text-white" />
+      <div className="bg-[#1a1a1a] border-b border-[#2a2a2a]">
+        <div className="px-4 py-3">
+          <div className="flex items-center justify-between">
+            <h1 className="text-base font-medium text-white">New chat</h1>
+            <div className="flex items-center gap-2">
+              <button className="p-1.5 hover:bg-[#2a2a2a] rounded transition-colors">
+                <Plus className="w-4 h-4 text-gray-400" />
+              </button>
+              <button className="p-1.5 hover:bg-[#2a2a2a] rounded transition-colors">
+                <Cloud className="w-4 h-4 text-gray-400" />
+              </button>
+              <button className="p-1.5 hover:bg-[#2a2a2a] rounded transition-colors">
+                <Clock className="w-4 h-4 text-gray-400" />
+              </button>
+              <button className="p-1.5 hover:bg-[#2a2a2a] rounded transition-colors">
+                <MoreHorizontal className="w-4 h-4 text-gray-400" />
+              </button>
+              <button className="p-1.5 hover:bg-[#2a2a2a] rounded transition-colors">
+                <X className="w-4 h-4 text-gray-400" />
+              </button>
             </div>
-            <div className="flex-1">
-              <h1 className="text-lg font-semibold text-slate-800">PowerPoint Assistant</h1>
-              <p className="text-xs text-slate-500">AI-powered presentation help</p>
-            </div>
-            {isStreaming && (
-              <div className="flex items-center gap-2 text-xs text-blue-600">
-                <div className="w-2 h-2 bg-blue-600 rounded-full animate-pulse"></div>
-                Processing
-              </div>
-            )}
           </div>
         </div>
       </div>
 
       {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
-        {messages.map((message) => (
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+        {messages.length === 1 && (
+          <div className="flex flex-col items-center justify-center h-full pb-20">
+            {/* Placeholder text */}
+            <p className="text-base text-gray-500">Plan, search, build anything</p>
+          </div>
+        )}
+
+        {messages.length > 1 && messages.slice(1).map((message) => (
           <div
             key={message.id}
             className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
           >
             <div
-              className={`max-w-[85%] rounded-2xl px-4 py-3 ${
+              className={`max-w-[85%] rounded-lg px-4 py-2.5 ${
                 message.sender === 'user'
-                  ? 'bg-blue-600 text-white'
+                  ? 'bg-[#2d2d2d] text-white'
                   : message.isError
-                  ? 'bg-red-50 text-red-800 border border-red-200'
-                  : 'bg-white text-slate-800 border border-slate-200 shadow-sm'
+                  ? 'bg-red-900/20 text-red-300 border border-red-800'
+                  : 'bg-[#252525] text-gray-200'
               }`}
             >
               <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">
                 {message.text}
               </p>
-              <p
-                className={`text-xs mt-1.5 ${
-                  message.sender === 'user'
-                    ? 'text-blue-100'
-                    : message.isError
-                    ? 'text-red-400'
-                    : 'text-slate-400'
-                }`}
-              >
+              <p className="text-xs mt-1 text-gray-500">
                 {formatTime(message.timestamp)}
               </p>
             </div>
@@ -301,23 +243,14 @@ export default function PowerPointChatAddin() {
         {/* Tool Calls Display */}
         {toolCalls.length > 0 && (
           <div className="flex justify-start">
-            <div className="bg-white border border-slate-200 shadow-sm rounded-2xl px-4 py-3 max-w-[85%]">
+            <div className="bg-[#252525] rounded-lg px-4 py-2.5 max-w-[85%]">
               <div className="space-y-2">
                 {toolCalls.map((tool) => (
                   <div key={tool.id} className="flex items-start gap-2">
-                    {tool.status === 'running' && (
-                      <Wrench className="w-4 h-4 text-blue-600 animate-pulse mt-0.5" />
-                    )}
-                    {tool.status === 'success' && (
-                      <CheckCircle className="w-4 h-4 text-green-600 mt-0.5" />
-                    )}
-                    {tool.status === 'failed' && (
-                      <XCircle className="w-4 h-4 text-red-600 mt-0.5" />
-                    )}
                     <div className="flex-1">
-                      <p className="text-xs font-medium text-slate-700">{tool.tool}</p>
+                      <p className="text-xs font-medium text-gray-300">{tool.tool}</p>
                       {tool.result && (
-                        <p className="text-xs text-slate-500 mt-0.5">{tool.result}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">{tool.result}</p>
                       )}
                     </div>
                   </div>
@@ -330,23 +263,23 @@ export default function PowerPointChatAddin() {
         {/* Streaming Message */}
         {currentStreamingMessage && (
           <div className="flex justify-start">
-            <div className="bg-white text-slate-800 border border-slate-200 shadow-sm rounded-2xl px-4 py-3 max-w-[85%]">
+            <div className="bg-[#252525] text-gray-200 rounded-lg px-4 py-2.5 max-w-[85%]">
               <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">
                 {currentStreamingMessage}
-                <span className="inline-block w-0.5 h-4 bg-blue-600 ml-1 animate-pulse"></span>
+                <span className="inline-block w-0.5 h-4 bg-blue-500 ml-1 animate-pulse"></span>
               </p>
             </div>
           </div>
         )}
 
-        {/* Typing indicator when streaming started but no content yet */}
+        {/* Typing indicator */}
         {isStreaming && !currentStreamingMessage && toolCalls.length === 0 && (
           <div className="flex justify-start">
-            <div className="bg-white text-slate-800 border border-slate-200 shadow-sm rounded-2xl px-4 py-3">
+            <div className="bg-[#252525] rounded-lg px-4 py-2.5">
               <div className="flex gap-1.5">
-                <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
-                <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
-                <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+                <span className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
+                <span className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
+                <span className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
               </div>
             </div>
           </div>
@@ -355,22 +288,28 @@ export default function PowerPointChatAddin() {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input Area */}
-      <div className="bg-white border-t border-slate-200 shadow-lg">
-        
-        <div className="px-6 py-4">
-          <div className="flex gap-3 items-end">
-            <div className="flex-1 bg-slate-50 rounded-xl border border-slate-200 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-100 transition-all">
+      {/* Footer */}
+      <div className="border-t border-[#2a2a2a] bg-[#1a1a1a]">
+        <div className="px-4 py-4">
+          {/* Add context button */}
+          <button className="flex items-center gap-2 text-sm text-gray-400 hover:text-gray-300 mb-3 transition-colors">
+            <AtSign className="w-4 h-4" />
+            <span>Add context</span>
+          </button>
+
+          {/* Input Area */}
+          <div className="flex gap-2 items-end mb-3">
+            <div className="flex-1 bg-[#252525] rounded-lg border border-[#3a3a3a] focus-within:border-[#4a4a4a] transition-all">
               <textarea
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyPress={handleKeyPress}
                 placeholder="Type your message..."
                 disabled={isStreaming}
-                className="w-full px-4 py-3 bg-transparent text-slate-800 placeholder-slate-400 resize-none outline-none text-sm disabled:opacity-50"
+                className="w-full px-3 py-2.5 bg-transparent text-white placeholder-gray-500 resize-none outline-none text-sm disabled:opacity-50"
                 rows="1"
                 style={{
-                  minHeight: '44px',
+                  minHeight: '40px',
                   maxHeight: '120px',
                   overflow: 'auto'
                 }}
@@ -379,16 +318,52 @@ export default function PowerPointChatAddin() {
             <button
               onClick={handleSend}
               disabled={!inputValue.trim() || isStreaming}
-              className="bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white p-3 rounded-xl transition-colors duration-200 shadow-sm hover:shadow-md"
+              className="bg-[#2d2d2d] hover:bg-[#3a3a3a] disabled:bg-[#252525] disabled:cursor-not-allowed text-white p-2.5 rounded-lg transition-colors duration-200"
             >
-              <Send className="w-5 h-5" />
+              <Send className="w-4 h-4" />
             </button>
           </div>
-          <p className="text-xs text-slate-400 mt-2 text-center">
-            {isStreaming ? 'Processing your request...' : 'Press Enter to send, Shift+Enter for new line'}
-          </p>
+
+          {/* Agent selector */}
+          <div className="flex items-center gap-4 mb-3">
+            <div className="flex items-center gap-2">
+              <div className="w-5 h-5 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+                <span className="text-xs">∞</span>
+              </div>
+              <button className="flex items-center gap-1 text-sm text-gray-300 hover:text-white transition-colors">
+                <span>{selectedAgent}</span>
+                <ChevronDown className="w-3 h-3" />
+              </button>
+            </div>
+            <span className="text-sm text-gray-500">Auto</span>
+            <div className="ml-auto flex items-center gap-2">
+              <button className="p-1.5 hover:bg-[#2a2a2a] rounded transition-colors">
+                <Image className="w-4 h-4 text-gray-400" />
+              </button>
+              <button className="p-1.5 hover:bg-[#2a2a2a] rounded transition-colors">
+                <Upload className="w-4 h-4 text-gray-400" />
+              </button>
+            </div>
+          </div>
+
+          {/* Bottom bar */}
+          <div className="flex items-center justify-between text-xs text-gray-500">
+            <button className="hover:text-gray-400 transition-colors">
+              Past chats →
+            </button>
+            <div className="flex items-center gap-3">
+              <button className="hover:text-gray-400 transition-colors flex items-center gap-1">
+                <span className="text-lg">⊙</span>
+                Deckable Tab
+              </button>
+              <button className="hover:text-gray-400 transition-colors">
+                🔔
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
   );
+
 }

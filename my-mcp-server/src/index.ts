@@ -11,7 +11,7 @@ import { z } from "zod";
 // Create server instance
 const server = new Server(
   {
-    name: "ppt-automation",	
+    name: "ppt-automation",
     version: "1.0.0",
   },
   {
@@ -48,26 +48,6 @@ const tools = [
     inputSchema: {
       type: "object",
       properties: {},
-    },
-  },
-  {
-    name: "add_title_slide",
-    description: "Add a title slide with title and subtitle",
-    inputSchema: {
-      type: "object",
-      properties: {
-        title: { type: "string", description: "Main title text" },
-        subtitle: { type: "string", description: "Subtitle text" },
-        title_left: { type: "number", description: "Title X position (optional)" },
-        title_top: { type: "number", description: "Title Y position (optional)" },
-        title_width: { type: "number", description: "Title width (optional)" },
-        title_height: { type: "number", description: "Title height (optional)" },
-        subtitle_left: { type: "number", description: "Subtitle X position (optional)" },
-        subtitle_top: { type: "number", description: "Subtitle Y position (optional)" },
-        subtitle_width: { type: "number", description: "Subtitle width (optional)" },
-        subtitle_height: { type: "number", description: "Subtitle height (optional)" },
-      },
-      required: ["title", "subtitle"],
     },
   },
   {
@@ -277,22 +257,348 @@ const tools = [
       },
     },
   },
+  //   {
+  //     name: "get_slide_shapes",
+  //     description: `Return a full list of shapes in the specified slide. 
+  // This includes semantic metadata such as:
+  // - shape_id (stable ID like "shape_0")
+  // - shape_index (order on slide)
+  // - shape_name (e.g., "Title 1", "Subtitle 2")
+  // - shape_type ("title", "subtitle", "placeholder", "textbox", etc.)
+  // - has_text and text_content
+  // - position { left, top, width, height } in inches
+  // - is_title and is_subtitle flags
+
+  // Use this tool whenever you need to:
+  // 1. Detect the title shape (is_title === true)
+  // 2. Detect the subtitle shape
+  // 3. Inspect or modify existing text on a slide
+  // 4. Understand layout before inserting or replacing content
+  // `,
+  //     inputSchema: {
+  //       type: "object",
+  //       properties: {
+  //         slide_id: {
+  //           type: "string",
+  //           description: "ID of the slide to get shapes from"
+  //         },
+  //       },
+  //       required: ["slide_id"],
+  //     },
+  //   },
+  //   {
+  //     name: "set_title_position",
+  //     description: `Set the position and size of the title shape on a slide.
+
+  // This tool automatically finds the shape where is_title === true (the primary title placeholder)
+  // and updates its layout to the specified left, top, width, and height values (in inches).
+
+  // Use this tool when you want to:
+  // - Move the title to a new position
+  // - Resize the title area before adding text
+  // - Align the title with other elements
+  // - Fix poorly placed titles after creating a slide
+
+  // If the slide has no title placeholder, the tool will return an error.
+  // `,
+  //     inputSchema: {
+  //       type: "object",
+  //       properties: {
+  //         slide_id: {
+  //           type: "string",
+  //           description: "ID of the slide"
+  //         },
+  //         left: {
+  //           type: "number",
+  //           description: "X position in inches from left edge"
+  //         },
+  //         top: {
+  //           type: "number",
+  //           description: "Y position in inches from top edge"
+  //         },
+  //         width: {
+  //           type: "number",
+  //           description: "Width in inches"
+  //         },
+  //         height: {
+  //           type: "number",
+  //           description: "Height in inches"
+  //         },
+  //       },
+  //       required: ["slide_id", "left", "top", "width", "height"],
+  //     },
+  //   },
+  //   {
+  //     name: "get_title_coordinates",
+  //     description: `Get the position and dimensions of the title shape in a slide.
+
+  // This tool returns only the title shape's coordinates and metadata:
+  // - has_title (boolean indicating if a title exists)
+  // - title_text (current text in the title)
+  // - coordinates { left, top, width, height } in inches
+
+  // Use this tool when you need to:
+  // 1. Quickly check if a slide has a title and where it's positioned
+  // 2. Get title dimensions before copying layout to other slides
+  // 3. Verify title placement after modifications
+  // 4. Extract title position for bulk operations
+
+  // This is faster than get_slide_shapes when you only need title information.
+  // `,
+  //     inputSchema: {
+  //       type: "object",
+  //       properties: {
+  //         slide_id: {
+  //           type: "string",
+  //           description: "ID of the slide to get title coordinates from"
+  //         },
+  //       },
+  //       required: ["slide_id"],
+  //     },
+  //   },
+
+  //   {
+  //     name: "set_bulk_title_positions",
+  //     description: `Set the same title position for multiple slides at once.
+
+  // This tool accepts an array of slide numbers (1-based, e.g., [1, 2, 3]) and a single position configuration.
+  // It applies the same position and size to all specified slides' title shapes.
+
+  // Use this tool when you need to:
+  // 1. Apply consistent title positioning across multiple slides
+  // 2. Align titles to match a template or brand guidelines  
+  // 3. Batch-update slide layouts efficiently with uniform positioning
+  // 4. Standardize title placement across selected slides
+
+  // The position can include all or some properties (left, top, width, height).
+  // Omitted properties will remain unchanged for each slide.
+
+  // Example: To move titles on slides 1, 3, and 5 to the same position:
+  // - slide_numbers: [1, 3, 5]
+  // - position: { left: 1.0, top: 0.5, width: 8.0, height: 1.0 }
+  // `,
+  //     inputSchema: {
+  //       type: "object",
+  //       properties: {
+  //         slide_numbers: {
+  //           type: "array",
+  //           description: "Array of slide numbers (1-based indexing, e.g., [1, 2, 3])",
+  //           items: {
+  //             type: "number"
+  //           }
+  //         },
+  //         position: {
+  //           type: "object",
+  //           description: "Position and size properties to apply to all slides (all values in inches)",
+  //           properties: {
+  //             left: {
+  //               type: "number",
+  //               description: "X position in inches from left edge (optional)"
+  //             },
+  //             top: {
+  //               type: "number",
+  //               description: "Y position in inches from top edge (optional)"
+  //             },
+  //             width: {
+  //               type: "number",
+  //               description: "Width in inches (optional)"
+  //             },
+  //             height: {
+  //               type: "number",
+  //               description: "Height in inches (optional)"
+  //             },
+  //           }
+  //         }
+  //       },
+  //       required: ["slide_numbers", "position"],
+  //     },
+  //   },
+  {
+    name: "align_titles_to_reference_slide",
+    description: `Copy the title position from one slide and apply it to other slides.
+
+WHAT IT DOES:
+This tool takes a reference slide number and copies its title's exact position (left, top, width, height coordinates) to multiple target slides.
+
+WHEN TO USE:
+- User says: "Make all titles match slide 2" or "align titles to slide 2"
+- User says: "Use slide 1's title position for slides 3-7"
+- User wants consistent title placement across slides
+- User wants to fix misaligned titles by matching a good example
+
+HOW IT WORKS:
+1. Gets title coordinates from reference slide (must have a title)
+2. Applies same coordinates to all target slides
+3. Returns success/failure for each slide
+
+PARAMETERS:
+- reference_slide_number: Which slide to copy FROM (e.g., 2 means "use slide 2 as template")
+- target_slide_numbers: Which slides to apply TO (e.g., [1,3,4,5] means "update these slides")
+
+EXAMPLES:
+Query: "Align all titles to match slide 2's position"
+→ reference_slide_number: 2
+→ target_slide_numbers: [1, 3, 4, 5, 6, 7, 8]
+
+Query: "Make slides 5-10 use the same title position as slide 1"  
+→ reference_slide_number: 1
+→ target_slide_numbers: [5, 6, 7, 8, 9, 10]
+
+Query: "Fix title on slide 7 to match slide 4"
+→ reference_slide_number: 4
+→ target_slide_numbers: [7]
+
+IMPORTANT: Use 1-based indexing (slide 1 = first slide, not 0).
+`,
+    inputSchema: {
+      type: "object",
+      properties: {
+        reference_slide_number: {
+          type: "number",
+          description: "Slide number to COPY title position FROM (1-based, e.g., 2 for second slide)"
+        },
+        target_slide_numbers: {
+          type: "array",
+          description: "Slide numbers to APPLY title position TO (1-based array, e.g., [1,3,4,5])",
+          items: {
+            type: "number"
+          }
+        }
+      },
+      required: ["reference_slide_number", "target_slide_numbers"],
+    },
+  },
+  {
+    name: "align_subtitles_to_reference_slide",
+    description: `Copy the subtitle position from one slide and apply it to other slides.
+
+WHAT IT DOES:
+This tool takes a reference slide number and copies its subtitle's exact position (left, top, width, height coordinates) to multiple target slides.
+
+WHEN TO USE:
+- User says: "Make all subtitles match slide 2" or "align subtitles to slide 2"
+- User says: "Use slide 1's subtitle position for slides 3-7"
+- User wants consistent subtitle placement across slides
+- User wants to fix misaligned subtitles by matching a good example
+
+HOW IT WORKS:
+1. Gets subtitle coordinates from reference slide (must have a subtitle)
+2. Applies same coordinates to all target slides
+3. Returns success/failure for each slide
+
+PARAMETERS:
+- reference_slide_number: Which slide to copy FROM (e.g., 2 means "use slide 2 as template")
+- target_slide_numbers: Which slides to apply TO (e.g., [1,3,4,5] means "update these slides")
+
+EXAMPLES:
+Query: "Align all subtitles to match slide 2's position"
+→ reference_slide_number: 2
+→ target_slide_numbers: [1, 3, 4, 5, 6, 7, 8]
+
+Query: "Make slides 5-10 use the same subtitle position as slide 1"  
+→ reference_slide_number: 1
+→ target_slide_numbers: [5, 6, 7, 8, 9, 10]
+
+Query: "Fix subtitle on slide 7 to match slide 4"
+→ reference_slide_number: 4
+→ target_slide_numbers: [7]
+
+IMPORTANT: Use 1-based indexing (slide 1 = first slide, not 0).
+`,
+    inputSchema: {
+      type: "object",
+      properties: {
+        reference_slide_number: {
+          type: "number",
+          description: "Slide number to COPY subtitle position FROM (1-based, e.g., 2 for second slide)"
+        },
+        target_slide_numbers: {
+          type: "array",
+          description: "Slide numbers to APPLY subtitle position TO (1-based array, e.g., [1,3,4,5])",
+          items: {
+            type: "number"
+          }
+        }
+      },
+      required: ["reference_slide_number", "target_slide_numbers"],
+    },
+  },
+  {
+    name: "align_footnotes_to_reference_slide",
+    description: `Copy the footnote position from one slide and apply it to other slides.
+
+WHAT IT DOES:
+This tool takes a reference slide number and copies its footnote's exact position (left, top, width, height coordinates) to multiple target slides. Footnotes are typically small text boxes at the bottom of slides containing references, disclaimers, or additional notes.
+
+WHEN TO USE:
+- User says: "Make all footnotes match slide 2" or "align footnotes to slide 2"
+- User says: "Use slide 1's footnote position for slides 3-7"
+- User wants consistent footnote placement across slides
+- User wants to fix misaligned footnotes or disclaimers by matching a good example
+- User needs to standardize small text at bottom of slides
+
+HOW IT WORKS:
+1. Gets footnote coordinates from reference slide (must have a footnote text box)
+2. Applies same coordinates to all target slides
+3. Returns success/failure for each slide
+
+PARAMETERS:
+- reference_slide_number: Which slide to copy FROM (e.g., 2 means "use slide 2 as template")
+- target_slide_numbers: Which slides to apply TO (e.g., [1,3,4,5] means "update these slides")
+
+EXAMPLES:
+Query: "Align all footnotes to match slide 2's position"
+→ reference_slide_number: 2
+→ target_slide_numbers: [1, 3, 4, 5, 6, 7, 8]
+
+Query: "Make slides 5-10 use the same footnote position as slide 1"  
+→ reference_slide_number: 1
+→ target_slide_numbers: [5, 6, 7, 8, 9, 10]
+
+Query: "Fix footnote on slide 7 to match slide 4"
+→ reference_slide_number: 4
+→ target_slide_numbers: [7]
+
+Query: "Standardize disclaimer text position using slide 3 as reference"
+→ reference_slide_number: 3
+→ target_slide_numbers: [1, 2, 4, 5, 6]
+
+IMPORTANT: Use 1-based indexing (slide 1 = first slide, not 0).
+`,
+    inputSchema: {
+      type: "object",
+      properties: {
+        reference_slide_number: {
+          type: "number",
+          description: "Slide number to COPY footnote position FROM (1-based, e.g., 2 for second slide)"
+        },
+        target_slide_numbers: {
+          type: "array",
+          description: "Slide numbers to APPLY footnote position TO (1-based array, e.g., [1,3,4,5])",
+          items: {
+            type: "number"
+          }
+        }
+      },
+      required: ["reference_slide_number", "target_slide_numbers"],
+    },
+  }
 ];
 
 // Helper function to make API calls
 async function callAPI(endpoint: string, method: string = "GET", body?: any) {
   const baseURL = process.env.PPT_API_URL || "http://127.0.0.1:8000";
   const url = `${baseURL}${endpoint}`;
-  
+
   const options: RequestInit = {
     method,
     headers: body ? { "Content-Type": "application/json" } : {},
   };
-  
+
   if (body) {
     options.body = JSON.stringify(body);
   }
-  
+
   const response = await fetch(url, options);
   return await response.json();
 }
@@ -321,30 +627,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case "list_slides":
         result = await callAPI("/slides");
         break;
-
-      case "add_title_slide": {
-        const slideRes = await callAPI("/slide", "POST");
-        const slideId = (slideRes as any).slide_id;
-
-        await callAPI(`/slide/${slideId}/title`, "POST", {
-          text: args?.title,
-          left: args?.title_left,
-          top: args?.title_top,
-          width: args?.title_width,
-          height: args?.title_height,
-        });
-
-        await callAPI(`/slide/${slideId}/subtitle`, "POST", {
-          text: args?.subtitle,
-          left: args?.subtitle_left,
-          top: args?.subtitle_top,
-          width: args?.subtitle_width,
-          height: args?.subtitle_height,
-        });
-
-        result = { message: "Title slide added successfully", slide_id: slideId };
-        break;
-      }
 
       case "delete_slide":
         result = await callAPI(`/slide/${args?.slide_id}`, "DELETE");
@@ -495,12 +777,60 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         });
         break;
 
+      // case "get_slide_shapes":
+      //   result = await callAPI(`/slide/${args?.slide_id}/shapes`);
+      //   break;
+
+      // case "set_title_position":
+      //   result = await callAPI(`/slide/${args?.slide_id}/title/position`, "POST", {
+      //     left: args?.left,
+      //     top: args?.top,
+      //     width: args?.width,
+      //     height: args?.height,
+      //   });
+      //   break;
+      // case "set_title_position":
+      //   result = await callAPI(`/slide/${args?.slide_id}/title/position`, "POST", {
+      //     left: args?.left,
+      //     top: args?.top,
+      //     width: args?.width,
+      //     height: args?.height,
+      //   });
+      //   break;
+      case "align_titles_to_reference_slide":
+        result = await callAPI("/slides/align_titles_to_reference", "POST", {
+          reference_slide_number: args?.reference_slide_number,
+          target_slide_numbers: args?.target_slide_numbers,
+        });
+        break;
+      case "align_subtitles_to_reference_slide":
+        result = await callAPI("/slides/align_subtitles_to_reference", "POST", {
+          reference_slide_number: args?.reference_slide_number,
+          target_slide_numbers: args?.target_slide_numbers,
+        });
+        break;
+
+      case "align_footnotes_to_reference_slide":
+        result = await callAPI("/slides/align_footnotes_to_reference", "POST", {
+          reference_slide_number: args?.reference_slide_number,
+          target_slide_numbers: args?.target_slide_numbers,
+        });
+        break;
       case "save_presentation":
         result = await callAPI("/save", "POST", {
           filename: args?.filename || "output.pptx",
         });
         break;
+      // case "get_title_coordinates":
+      //   result = await callAPI(`/slide/${args?.slide_id}/title/coordinates`);
+      //   break;
 
+      // case "set_bulk_title_positions":
+      //   result = await callAPI(`/slides/bulk/title/position`, "POST", {
+      //     slide_numbers: args?.slide_numbers,
+      //     position: args?.position,
+      //   });
+      //   break;
       default:
         throw new Error(`Unknown tool: ${name}`);
     }
@@ -513,7 +843,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         },
       ],
     };
-  } catch (error:any) {
+  } catch (error: any) {
     return {
       content: [
         {

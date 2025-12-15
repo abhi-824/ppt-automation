@@ -13,7 +13,9 @@ import (
 )
 
 type ChatRequest struct {
-	Prompt string `json:"prompt"`
+	Prompt      string `json:"prompt"`
+	SlideBase64 string `json:"slide_base64"`
+	X           int    `json:"x"`
 }
 
 func callPython(path string, method string, body interface{}) ([]byte, error) {
@@ -125,6 +127,18 @@ func handleChat(w http.ResponseWriter, r *http.Request, host *sdk.MCPHost) {
 	if req.Prompt == "" {
 		http.Error(w, "Prompt is required", http.StatusBadRequest)
 		return
+	}
+
+	// Send slideBase64 to Python service if provided
+	if req.SlideBase64 != "" && req.X == 1 {
+		slideData := map[string]string{
+			"slideBase64": req.SlideBase64,
+		}
+		_, err := callPython("/set/slideBase64", http.MethodPost, slideData)
+		if err != nil {
+			log.Printf("Error sending slideBase64 to Python service: %v", err)
+			// Continue processing even if this fails
+		}
 	}
 
 	// Check if streaming is supported
