@@ -1,227 +1,61 @@
 package main
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 
 	"github.com/mark3labs/mcphost/sdk"
+
+	"orchestrator/config"
+	"orchestrator/handlers"
+	"orchestrator/middleware"
+	"orchestrator/utils"
 )
 
-type ChatRequest struct {
-	Prompt      string `json:"prompt"`
-	SlideBase64 string `json:"slide_base64"`
-	X           int    `json:"x"`
-}
-
-func callPython(path string, method string, body interface{}) ([]byte, error) {
-	url := "http://localhost:8000" + path
-	print(url)
-
-	var reqBody io.Reader = nil
-	if body != nil {
-		b, _ := json.Marshal(body)
-		reqBody = bytes.NewBuffer(b)
-	}
-
-	req, err := http.NewRequest(method, url, reqBody)
-	if err != nil {
-		print(err)
-		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	return io.ReadAll(resp.Body)
-}
-
 func main() {
-	ctx := context.Background()
+	cfg := config.Load()
 
-	// Create MCPHost instance with Ollama configuration
+	// Create MCPHost instance
+	ctx := context.Background()
 	host, err := sdk.New(ctx, &sdk.Options{
-		Streaming:  true,
-		Quiet:      true,
-		ConfigFile: "/Users/the.narcissist.coder/karm/local.json",
-		Model:      "ollama:qwen2.5",
+		Streaming:  cfg.MCPStreaming,
+		Quiet:      cfg.MCPQuiet,
+		ConfigFile: cfg.MCPConfigFile,
+		Model:      cfg.MCPModel,
 	})
 	if err != nil {
 		log.Fatalf("Failed to start MCPHost: %v", err)
 	}
 	defer host.Close()
 
-	// Expose /chat SSE endpoint
-	http.HandleFunc("/chat", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
+	// Create HTTP client for Python API
+	httpClient := utils.NewHTTPClient(cfg.PythonAPIURL)
+
+	// Initialize handlers
+	chatHandler := handlers.NewChatHandler(host, httpClient)
+	previewHandler := handlers.NewPreviewHandler(httpClient)
+
+	// Setup routes
+	http.HandleFunc("/chat", middleware.CORSMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		handleChat(w, r, host)
-	}))
-	http.HandleFunc("/ppt/preview", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		print("hi")
-		result, err := callPython("/presentation/preview", http.MethodGet, nil)
-		if err != nil {
-			http.Error(w, err.Error(), 500)
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.Write(result)
+		chatHandler.Handle(w, r)
 	}))
 
-	// Health check endpoint
-	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
-	})
+	http.HandleFunc("/ppt/preview", middleware.CORSMiddleware(previewHandler.Handle))
 
-	fmt.Println("🚀 Orchestrator running at http://localhost:8080")
+	http.HandleFunc("/health", middleware.CORSMiddleware(handlers.HealthHandler))
+
+	// Start server
+	serverAddr := fmt.Sprintf(":%s", cfg.ServerPort)
+	fmt.Printf("🚀 Orchestrator running at https://%s%s\n", cfg.ServerAddress, serverAddr)
 	fmt.Println("📡 SSE endpoint: POST /chat")
+	fmt.Println("📊 Preview endpoint: GET /ppt/preview")
 	fmt.Println("❤️  Health check: GET /health")
-	log.Fatal(http.ListenAndServeTLS(":8080", "localhost+2.pem", "localhost+2-key.pem", nil))
-}
 
-func corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		// CORS headers for Office add-ins
-		origin := r.Header.Get("Origin")
-		if origin == "" {
-			origin = "*"
-		}
-
-		w.Header().Set("Access-Control-Allow-Origin", origin)
-		w.Header().Set("Vary", "Origin")
-		w.Header().Set("Access-Control-Allow-Credentials", "true")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With")
-		w.Header().Set("Access-Control-Max-Age", "86400")
-		// Handle preflight
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
-
-		next(w, r)
-	}
-}
-
-func handleChat(w http.ResponseWriter, r *http.Request, host *sdk.MCPHost) {
-	// Parse request BEFORE setting SSE headers
-	var req ChatRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-
-	if req.Prompt == "" {
-		http.Error(w, "Prompt is required", http.StatusBadRequest)
-		return
-	}
-
-	// Send slideBase64 to Python service if provided
-	if req.SlideBase64 != "" && req.X == 1 {
-		slideData := map[string]string{
-			"slideBase64": req.SlideBase64,
-		}
-		_, err := callPython("/set/slideBase64", http.MethodPost, slideData)
-		if err != nil {
-			log.Printf("Error sending slideBase64 to Python service: %v", err)
-			// Continue processing even if this fails
-		}
-	}
-
-	// Check if streaming is supported
-	flusher, ok := w.(http.Flusher)
-	if !ok {
-		http.Error(w, "Streaming unsupported", http.StatusInternalServerError)
-		return
-	}
-
-	// NOW set SSE headers
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
-	w.Header().Set("X-Accel-Buffering", "no") // Disable nginx buffering
-	flusher.Flush()
-
-	// Use request context for proper cancellation
-	ctx := r.Context()
-
-	// Send start event
-	sendSSE(w, map[string]string{
-		"type":   "start",
-		"prompt": req.Prompt,
-	})
-	flusher.Flush()
-
-	// Send prompt with streaming callbacks
-	response, err := host.PromptWithCallbacks(
-		ctx,
-		req.Prompt,
-
-		// TOOL CALL START
-		func(name, args string) {
-			event := map[string]interface{}{
-				"type": "tool-call",
-				"tool": name,
-				"args": args,
-			}
-			sendSSE(w, event)
-			flusher.Flush()
-		},
-
-		// TOOL RESULT END
-		func(name, args, result string, failed bool) {
-			event := map[string]interface{}{
-				"type":    "tool-result",
-				"tool":    name,
-				"result":  result,
-				"success": !failed,
-			}
-			sendSSE(w, event)
-			flusher.Flush()
-		},
-
-		// LLM TEXT TOKENS / DELTAS
-		func(chunk string) {
-			event := map[string]interface{}{
-				"type":    "token",
-				"content": chunk,
-			}
-			sendSSE(w, event)
-			flusher.Flush()
-		},
-	)
-
-	if err != nil {
-		sendSSE(w, map[string]string{
-			"type":  "error",
-			"error": err.Error(),
-		})
-		flusher.Flush()
-		return
-	}
-
-	// Send final response
-	sendSSE(w, map[string]interface{}{
-		"type":     "done",
-		"response": response,
-	})
-	flusher.Flush()
-}
-
-func sendSSE(w http.ResponseWriter, v interface{}) {
-	raw, _ := json.Marshal(v)
-	fmt.Fprintf(w, "data: %s\n\n", raw)
+	log.Fatal(http.ListenAndServeTLS(serverAddr, cfg.TLSCertFile, cfg.TLSKeyFile, nil))
 }
