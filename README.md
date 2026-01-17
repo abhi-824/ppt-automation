@@ -1,8 +1,6 @@
 <div align="center">
 
 # Beets
-
-<!-- Logo placeholder - Replace with your logo -->
 ![Beets Logo](assets/logo.png)
 
 **Cursor-like AI for PowerPoint** | Transform your presentations with natural language
