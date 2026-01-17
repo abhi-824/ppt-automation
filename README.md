@@ -3,7 +3,7 @@
 # Beets
 
 <!-- Logo placeholder - Replace with your logo -->
-<!-- ![Beets Logo](assets/logo-filled.png) -->
+![Beets Logo](assets/logo.png)
 
 **Cursor-like AI for PowerPoint** | Transform your presentations with natural language
 
@@ -19,6 +19,14 @@
 ## 🎯 Overview
 
 **Beets** is an intelligent PowerPoint add-in that brings Cursor-like AI capabilities to presentation creation. Chat with AI to build, edit, and enhance your slides using natural language. With component-wise change tracking and memory of previous modifications, Beets makes presentation design as easy as having a conversation.
+
+### 📚 Technical Deep Dives
+
+For comprehensive technical details, architecture decisions, and implementation insights, check out our Medium blog series:
+
+- **[Cursor for PowerPoint: The Existential Crisis](https://medium.com/@thenarcissistcoder/cursor-for-powerpoint-the-existential-crisis-d504d2139f52)** - Initial concept and challenges
+- **[Cursor for PPT - Part Two](https://medium.com/@thenarcissistcoder/cursor-for-ppt-part-two-4a029ababf7c)** - Implementation details and solutions
+- **[Cursor for PPT - MCP Server](https://medium.com/@thenarcissistcoder/cursor-for-ppt-mcp-server-7013e6df92f6)** - MCP server architecture and tool integration
 
 ## ✨ Key Features
 
