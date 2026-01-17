@@ -5,7 +5,7 @@
 
 **Cursor-like AI for PowerPoint** | Transform your presentations with natural language
 
-[Website](#) | [Demo Video](#) | [Documentation](#)
+[Website](https://beets-ai.netlify.app/) | [Demo Video](https://youtu.be/nLI1lgSZS0s)
 
 <!-- Screenshot placeholder - Replace with actual screenshots -->
 <!-- ![Beets in Action](assets/screenshot-main.png) -->
@@ -57,9 +57,7 @@ Beets can access:
 ## 🎬 Demo
 
 <!-- Demo video placeholder - Replace with YouTube embed -->
-<!-- [![Watch the Demo](https://img.youtube.com/vi/YOUR_VIDEO_ID/0.jpg)](https://www.youtube.com/watch?v=YOUR_VIDEO_ID) -->
-
-[Watch Full Demo on YouTube](#)
+<iframe width="560" height="315" src="https://www.youtube.com/embed/nLI1lgSZS0s?si=6iMQCV_nxSgvkrnZ" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
 
 <!-- Additional screenshots -->
 <!-- ![Feature Screenshot 1](assets/screenshot-features.png) -->
