@@ -1043,6 +1043,69 @@ def align_footnotes_to_reference(request: dict):
             })
     
     return {"data":"Success"}
+
+@app.post("/slides/align_shapes_to_reference")
+def align_shapes_to_reference(request: dict):
+    """
+    Align multiple shape types (title, subtitle, footnote) to match a reference slide
+    
+    Expected body format:
+    {
+        "reference_slide_number": 2,
+        "target_slide_numbers": [1, 3, 4, 5],
+        "shapes_to_align": ["title", "subtitle", "footnote"]
+    }
+    """
+    
+    if "reference_slide_number" not in request or "target_slide_numbers" not in request or "shapes_to_align" not in request:
+        return {"error": "Missing required fields: 'reference_slide_number', 'target_slide_numbers', or 'shapes_to_align'"}
+    
+    reference_slide_num = request["reference_slide_number"]
+    target_slide_numbers = request["target_slide_numbers"]
+    shapes_to_align = request["shapes_to_align"]
+    
+    # Validate inputs
+    if not isinstance(target_slide_numbers, list) or len(target_slide_numbers) == 0:
+        return {"error": "target_slide_numbers must be a non-empty array"}
+    
+    if not isinstance(shapes_to_align, list) or len(shapes_to_align) == 0:
+        return {"error": "shapes_to_align must be a non-empty array"}
+    
+    valid_shapes = ["title", "subtitle", "footnote"]
+    for shape in shapes_to_align:
+        if shape not in valid_shapes:
+            return {"error": f"Invalid shape type '{shape}'. Valid types: {valid_shapes}"}
+    
+    # Dispatch to individual alignment functions
+    results = {}
+    
+    if "title" in shapes_to_align:
+        title_result = align_titles_to_reference({
+            "reference_slide_number": reference_slide_num,
+            "target_slide_numbers": target_slide_numbers
+        })
+        results["title"] = title_result
+    
+    if "subtitle" in shapes_to_align:
+        subtitle_result = align_subtitles_to_reference({
+            "reference_slide_number": reference_slide_num,
+            "target_slide_numbers": target_slide_numbers
+        })
+        results["subtitle"] = subtitle_result
+    
+    if "footnote" in shapes_to_align:
+        footnote_result = align_footnotes_to_reference({
+            "reference_slide_number": reference_slide_num,
+            "target_slide_numbers": target_slide_numbers
+        })
+        results["footnote"] = footnote_result
+    
+    return {
+        "reference_slide": reference_slide_num,
+        "target_slides": target_slide_numbers,
+        "shapes_aligned": shapes_to_align,
+        "results": results
+    }
 if __name__ == "__main__":
     main()
 
