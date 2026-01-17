@@ -56,8 +56,8 @@ Beets can access:
 
 ## 🎬 Demo
 
-<!-- Demo video placeholder - Replace with YouTube embed -->
-<iframe width="560" height="315" src="https://www.youtube.com/embed/nLI1lgSZS0s?si=6iMQCV_nxSgvkrnZ" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+[![Beets Demo](https://img.youtube.com/vi/nLI1lgSZS0s/maxresdefault.jpg)](https://www.youtube.com/watch?v=nLI1lgSZS0s)
+
 
 <!-- Additional screenshots -->
 <!-- ![Feature Screenshot 1](assets/screenshot-features.png) -->
@@ -295,11 +295,7 @@ We welcome contributions! Please see our contributing guidelines (coming soon).
 
 ## 🔗 Links
 
-- **Website**: [https://beets.ai](#) <!-- Replace with actual website -->
-- **Documentation**: [https://docs.beets.ai](#) <!-- Replace with actual docs -->
-- **Demo Video**: [YouTube](#) <!-- Replace with actual video -->
-- **Issue Tracker**: [GitHub Issues](#)
-- **Discussions**: [GitHub Discussions](#)
+- **Website**: [https://beets-ai.netlify.app](https://beets-ai.netlify.app/) <!-- Replace with actual website -->
 
 ## 🙏 Acknowledgments
 
@@ -316,6 +312,8 @@ Built with:
 
 **Made with ❤️ for PowerPoint users**
 
-[⭐ Star us on GitHub](#) | [🐛 Report Bug](#) | [💡 Request Feature](#)
-
+[⭐ Star us on GitHub](https://github.com/abhi-824/ppt-automation) |
+[🐛 Report a Bug](https://github.com/abhi-824/ppt-automation/issues/new?labels=bug&template=bug_report.md) |
+[💡 Request a Feature](https://github.com/abhi-824/ppt-automation/issues/new?labels=enhancement&template=feature_request.md)
+****
 </div>
