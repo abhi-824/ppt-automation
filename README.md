@@ -1,7 +1,7 @@
 <div align="center">
 
-# Beets
-![Beets Logo](assets/logo.png)
+# <img src="assets/logo.png" width="200" style="vertical-align: middle;" /> Beets
+
 
 **Cursor-like AI for PowerPoint** | Transform your presentations with natural language
 
